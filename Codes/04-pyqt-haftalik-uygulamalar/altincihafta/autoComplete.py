@@ -8,13 +8,13 @@ class Window(QWidget):
         self.setLayout(layout)
 
         # auto complete options                                                 
-        names = ["Apple", "Alps", "Berry", "Cherry" ]
+        names = ["Apple", "Alps", "Berry", "Cherry" ,"Ayşe"] #bu kelimeler arasında arama yapıyor. Birkaç harfi girdikten sonra otomatik tamamlama yapar.
         completer = QCompleter(names)
 
         # create line edit and add auto complete                                
-        self.lineedit = QLineEdit()
-        self.lineedit.setCompleter(completer)
-        layout.addWidget(self.lineedit, 0, 0)
+        self.lineedit = QLineEdit() #giriş alanı oluşturduk
+        self.lineedit.setCompleter(completer) # burada otomatik tamamlama özelliğini ekledik
+        layout.addWidget(self.lineedit, 0, 0) #0,0 ile pencerenin neresine yerleşeceğini belirledik
 
 app = QApplication(sys.argv)
 screen = Window()

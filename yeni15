@@ -1,0 +1,352 @@
+import sys
+import sqlite3
+from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
+                             QVBoxLayout, QMessageBox, QListWidget,QCheckBox,QDialog, QDialogButtonBox)
+
+from PyQt5.QtCore import Qt
+
+def veritabani_baglan():
+    conn = sqlite3.connect('deprem_uygulamasi.db')
+    return conn
+
+def tablo_olustur():
+    conn = veritabani_baglan()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS kullanicilar (
+            tc_kimlik TEXT PRIMARY KEY,
+            sifre TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS adresler (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tc_kimlik TEXT,
+            sehir TEXT,
+            adres TEXT,
+            bina_adi TEXT,
+            FOREIGN KEY (tc_kimlik) REFERENCES kullanicilar(tc_kimlik)
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+tablo_olustur()
+
+# Modern CSS Stil Ayarları
+app_style = """
+    QWidget {
+        font-family: 'Segoe UI';
+        font-size: 16px;
+        background-color: #f5f5f5;
+    }
+    QLabel {
+        font-weight: bold;
+        color: #333;
+        font-size: 18px;
+    }
+    QLineEdit {
+        padding: 10px;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        font-size: 16px;
+        background-color: white;
+    }
+    QLineEdit:focus {
+        border: 2px solid #0078d7;
+    }
+    QPushButton {
+        padding: 12px 24px;
+        background-color: #0078d7;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    QPushButton:hover {
+        background-color: #005bb5;
+    }
+    QPushButton:pressed {
+        background-color: #004080;
+    }
+    QListWidget {
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: white;
+        font-size: 16px;
+    }
+    QMessageBox {
+        font-family: 'Segoe UI';
+        font-size: 16px;
+    }
+    QMessageBox QLabel {
+        font-size: 16px;
+    }
+    QMessageBox QPushButton {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+"""
+
+class GirisKayitFormu(QWidget):
+    def __init__(self, adres_kayit_formu):
+        super().__init__()
+        self.adres_kayit_formu = adres_kayit_formu
+        self.Ekle()
+
+    def Ekle(self):
+        self.setWindowTitle('Giriş / Kayıt')
+        self.setGeometry(500, 300, 700, 400)
+        self.setStyleSheet(app_style)
+
+        self.tc_label = QLabel('TC Kimlik No:')
+        self.tc_input = QLineEdit()
+
+        self.sifre_label = QLabel('Şifre:')
+        self.sifre_input = QLineEdit()
+        self.sifre_input.setEchoMode(QLineEdit.Password)
+
+        self.giris_button = QPushButton('Giriş')
+        self.kayit_button = QPushButton('Kayıt')
+
+        self.giris_button.clicked.connect(self.giris)
+        self.kayit_button.clicked.connect(self.kayit)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.tc_label)
+        düzen.addWidget(self.tc_input)
+        düzen.addWidget(self.sifre_label)
+        düzen.addWidget(self.sifre_input)
+        düzen.addWidget(self.giris_button)
+        düzen.addWidget(self.kayit_button)
+
+        self.setLayout(düzen)
+
+    def giris(self):
+        tc = self.tc_input.text()
+        sifre = self.sifre_input.text()
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM kullanicilar WHERE tc_kimlik = ? AND sifre = ?', (tc, sifre))
+        kullanici = cursor.fetchone()
+
+        conn.close()
+
+        if kullanici:
+            QMessageBox.information(self, 'Giriş', 'Giriş başarılı!')
+            self.adres_kayit_formu.tc = tc
+            self.adres_kayit_formu.show()
+            self.hide()
+        else:
+            QMessageBox.warning(self, 'Giriş', 'TC kimlik numarası veya şifre hatalı!')
+
+    def kayit(self):
+        tc = self.tc_input.text()
+        sifre = self.sifre_input.text()
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('INSERT INTO kullanicilar (tc_kimlik, sifre) VALUES (?, ?)', (tc, sifre))
+            conn.commit()
+            QMessageBox.information(self, 'Kayıt', 'Kayıt başarılı!')
+        except sqlite3.IntegrityError:
+            QMessageBox.warning(self, 'Kayıt', 'Bu TC kimlik numarası zaten kayıtlı!')
+
+        conn.close()
+
+class AdresKayitFormu(QWidget):
+    def __init__(self, adres_listesi_formu):
+        super().__init__()
+        self.adres_listesi_formu = adres_listesi_formu
+        self.Ekle()
+        self.tc = None
+
+    def Ekle(self):
+        self.setWindowTitle('Adres Kayıt')
+        self.setGeometry(500, 300, 700, 400)
+        self.setStyleSheet(app_style)
+
+        self.sehir_label = QLabel('Şehir:')
+        self.sehir_input = QLineEdit()
+
+        self.adres_label = QLabel('Adres:')
+        self.adres_input = QLineEdit()
+
+        self.bina_label = QLabel('Bina Adı:')
+        self.bina_input = QLineEdit()
+
+        self.kaydet_button = QPushButton('Kaydet')
+        self.kaydet_button.clicked.connect(self.kaydet)
+
+        self.adresleri_goster_button = QPushButton('Adresleri Göster')
+        self.adresleri_goster_button.clicked.connect(self.adresleri_goster)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.sehir_label)
+        düzen.addWidget(self.sehir_input)
+        düzen.addWidget(self.adres_label)
+        düzen.addWidget(self.adres_input)
+        düzen.addWidget(self.bina_label)
+        düzen.addWidget(self.bina_input)
+        düzen.addWidget(self.kaydet_button)
+        düzen.addWidget(self.adresleri_goster_button)
+
+        self.setLayout(düzen)
+
+    def kaydet(self):
+        sehir = self.sehir_input.text()
+        adres = self.adres_input.text()
+        bina = self.bina_input.text()
+
+        if not sehir or not adres or not bina:
+            QMessageBox.warning(self, 'Eksik Bilgi', 'Lütfen tüm bilgileri doldurun!')
+            return
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        cursor.execute('INSERT INTO adresler (tc_kimlik, sehir, adres, bina_adi) VALUES (?, ?, ?, ?)',
+                       (self.tc, sehir, adres, bina))
+        conn.commit()
+        conn.close()
+
+        QMessageBox.information(self, 'Kayıt', 'Adres kaydedildi!')
+        self.adres_listesi_formu.adresleri_guncelle(self.tc)
+        self.adres_listesi_formu.show()
+        self.hide()
+
+    def adresleri_goster(self):
+        self.adres_listesi_formu.adresleri_guncelle(self.tc)
+        self.adres_listesi_formu.show()
+        self.hide()
+
+
+
+class DepremDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Deprem")
+        
+        layout = QVBoxLayout(self)
+        
+        self.checkbox = QCheckBox("Güvende misiniz?", self)
+        layout.addWidget(self.checkbox)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def is_checked(self):
+        return self.checkbox.isChecked()
+
+class TumAdreslerFormu(QWidget):
+    def __init__(self, adres_durumu_formu):
+        super().__init__()
+        self.adres_durumu_formu = adres_durumu_formu
+        self.Ekle()
+        self.adresler = []
+        self.tc = None
+
+    def Ekle(self):
+        self.setWindowTitle('Tüm Adresler')
+        self.setGeometry(300, 300, 400, 300)
+
+        self.adres_liste_widget = QListWidget()
+
+        self.deprem_button = QPushButton('Deprem Oldu')
+        self.deprem_button.clicked.connect(self.deprem_oldu)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.adres_liste_widget)
+        düzen.addWidget(self.deprem_button)
+
+        self.setLayout(düzen)
+
+    def adresleri_guncelle(self, tc):
+        self.tc = tc
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+        cursor.execute("SELECT sehir, adres, bina_adi FROM adresler WHERE tc_kimlik = ?", (tc,))
+        self.adresler = cursor.fetchall()
+        conn.close()
+
+        self.adres_liste_widget.clear()
+        for adres in self.adresler:
+            self.adres_liste_widget.addItem(f"{adres[0]} - {adres[1]} ({adres[2]})")
+
+    def deprem_oldu(self):
+        dialog = DepremDialog(self)
+        result = dialog.exec_()
+
+        if result == QDialog.Accepted:
+            if dialog.is_checked():
+                self.adres_durumu_formu.adresleri_guncelle(self.tc)
+                self.adres_durumu_formu.show()
+            else:
+                QApplication.quit()
+        else:
+            QApplication.quit()
+
+class AdresDurumuFormu(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.Ekle()
+        self.adresler = []
+        self.tc = None
+
+    def Ekle(self):
+        self.setWindowTitle('Adres Durumu')
+        self.setGeometry(500, 300, 700, 400)
+        self.setStyleSheet(app_style)
+
+        self.adres_liste_widget = QListWidget()
+
+        self.sirala_button = QPushButton('Adres Sıralama')
+        self.sirala_button.clicked.connect(self.sirala)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.adres_liste_widget)
+        düzen.addWidget(self.sirala_button)
+
+        self.setLayout(düzen)
+
+    def adresleri_guncelle(self, tc):
+        self.tc = tc
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+        cursor.execute("SELECT sehir, adres, bina_adi FROM adresler WHERE tc_kimlik = ?", (tc,))
+        self.adresler = cursor.fetchall()
+        conn.close()
+
+        self.adres_liste_widget.clear()
+        for adres in self.adresler:
+            self.adres_liste_widget.addItem(f"{adres[0]} - {adres[1]} ({adres[2]})")
+
+    def sirala(self):
+        sorted_items = sorted(self.adresler, key=lambda x: x[2], reverse=True)
+        self.adres_liste_widget.clear()
+        for adres in sorted_items:
+            self.adres_liste_widget.addItem(f"{adres[0]} - {adres[1]} ({adres[2]})")
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    app.setStyleSheet(app_style)
+
+    adres_durumu_formu = AdresDurumuFormu()
+    adres_listesi_formu = TumAdreslerFormu(adres_durumu_formu)
+    adres_kayit_formu = AdresKayitFormu(adres_listesi_formu)
+    giris_kayit_formu = GirisKayitFormu(adres_kayit_formu)
+
+    giris_kayit_formu.show()
+
+    sys.exit(app.exec_())

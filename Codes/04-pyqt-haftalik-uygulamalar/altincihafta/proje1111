@@ -1,0 +1,146 @@
+import sys
+import sqlite3
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QMessageBox, QHBoxLayout
+from PyQt5.QtGui import QFont, QPalette, QColor
+from PyQt5.QtCore import Qt
+
+# Veritabanı bağlantısı
+conn = sqlite3.connect("earthquake_app.db")
+cursor = conn.cursor()
+
+# Tablo oluşturma
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tc TEXT UNIQUE,
+    password TEXT
+);
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS addresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_tc TEXT,
+    address TEXT,
+    safe INTEGER DEFAULT 0
+);
+""")
+conn.commit()
+
+class EarthquakeApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+    
+    def initUI(self):
+        self.setWindowTitle("Deprem Uyarı Uygulaması")
+        self.setGeometry(200, 100, 600, 500)
+        self.setStyleSheet("background-color: #e0e0e0;")
+        
+        self.layout = QVBoxLayout()
+        
+        self.label_tc = QLabel("TC Kimlik No:")
+        self.label_tc.setFont(QFont("Arial", 12, QFont.Bold))
+        self.input_tc = QLineEdit()
+        self.input_tc.setStyleSheet("padding: 8px; border: 2px solid #333; border-radius: 5px;")
+        
+        self.label_password = QLabel("Şifre:")
+        self.label_password.setFont(QFont("Arial", 12, QFont.Bold))
+        self.input_password = QLineEdit()
+        self.input_password.setEchoMode(QLineEdit.Password)
+        self.input_password.setStyleSheet("padding: 8px; border: 2px solid #333; border-radius: 5px;")
+        
+        self.button_layout = QHBoxLayout()
+        
+        self.btn_login = QPushButton("Giriş Yap")
+        self.btn_login.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
+        self.btn_login.clicked.connect(self.login)
+        
+        self.btn_register = QPushButton("Kayıt Ol")
+        self.btn_register.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; border-radius: 5px;")
+        self.btn_register.clicked.connect(self.register)
+        
+        self.button_layout.addWidget(self.btn_login)
+        self.button_layout.addWidget(self.btn_register)
+        
+        self.label_address = QLabel("Adres Ekle:")
+        self.label_address.setFont(QFont("Arial", 12, QFont.Bold))
+        self.input_address = QLineEdit()
+        self.input_address.setStyleSheet("padding: 8px; border: 2px solid #333; border-radius: 5px;")
+        
+        self.btn_add_address = QPushButton("Adres Kaydet")
+        self.btn_add_address.setStyleSheet("background-color: #FF9800; color: white; padding: 10px; border-radius: 5px;")
+        self.btn_add_address.clicked.connect(self.add_address)
+        
+        self.address_list = QListWidget()
+        self.address_list.setStyleSheet("background-color: white; padding: 5px; border-radius: 5px; border: 2px solid #666;")
+        
+        self.btn_earthquake = QPushButton("Deprem Oldu")
+        self.btn_earthquake.setStyleSheet("background-color: #F44336; color: white; padding: 15px; border-radius: 5px; font-size: 14px;")
+        self.btn_earthquake.clicked.connect(self.earthquake_occurred)
+        
+        self.layout.addWidget(self.label_tc)
+        self.layout.addWidget(self.input_tc)
+        self.layout.addWidget(self.label_password)
+        self.layout.addWidget(self.input_password)
+        self.layout.addLayout(self.button_layout)
+        self.layout.addWidget(self.label_address)
+        self.layout.addWidget(self.input_address)
+        self.layout.addWidget(self.btn_add_address)
+        self.layout.addWidget(self.address_list)
+        self.layout.addWidget(self.btn_earthquake)
+        
+        self.setLayout(self.layout)
+    
+    def login(self):
+        tc = self.input_tc.text()
+        password = self.input_password.text()
+        cursor.execute("SELECT * FROM users WHERE tc=? AND password=?", (tc, password))
+        user = cursor.fetchone()
+        if user:
+            QMessageBox.information(self, "Başarılı", "Giriş başarılı!")
+            self.load_addresses(tc)
+        else:
+            QMessageBox.warning(self, "Hata", "Geçersiz TC veya şifre!")
+    
+    def register(self):
+        tc = self.input_tc.text()
+        password = self.input_password.text()
+        try:
+            cursor.execute("INSERT INTO users (tc, password) VALUES (?, ?)", (tc, password))
+            conn.commit()
+            QMessageBox.information(self, "Başarılı", "Kayıt başarılı!")
+        except sqlite3.IntegrityError:
+            QMessageBox.warning(self, "Hata", "Bu TC numarası zaten kayıtlı!")
+    
+    def add_address(self):
+        tc = self.input_tc.text()
+        address = self.input_address.text()
+        cursor.execute("INSERT INTO addresses (user_tc, address) VALUES (?, ?)", (tc, address))
+        conn.commit()
+        self.load_addresses(tc)
+    
+    def load_addresses(self, tc):
+        self.address_list.clear()
+        cursor.execute("SELECT address, safe FROM addresses WHERE user_tc=? ORDER BY safe ASC", (tc,))
+        for address, safe in cursor.fetchall():
+            status = "(Güvenli)" if safe else "(Riskli)"
+            self.address_list.addItem(f"{address} {status}")
+    
+    def earthquake_occurred(self):
+        QMessageBox.information(self, "Uyarı", "Deprem oldu! Lütfen güvendeyseniz adresinize tıklayın.")
+        self.update_safe_status()
+    
+    def update_safe_status(self):
+        selected_item = self.address_list.currentItem()
+        if selected_item:
+            address_text = selected_item.text().split(" (Riskli)")[0].split(" (Güvenli)")[0]
+            cursor.execute("UPDATE addresses SET safe=1 WHERE address=?", (address_text,))
+            conn.commit()
+            self.load_addresses(self.input_tc.text())
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = EarthquakeApp()
+    window.show()
+    sys.exit(app.exec_())

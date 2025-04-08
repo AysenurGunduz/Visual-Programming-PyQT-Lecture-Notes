@@ -1,0 +1,178 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QMessageBox
+import sqlite3
+
+class Database:
+    def __init__(self):
+        self.conn = sqlite3.connect("deprem_app.db")
+        self.cursor = self.conn.cursor()
+        self.create_tables()
+    
+    def create_tables(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tc TEXT UNIQUE,
+            password TEXT
+        )
+        """)
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS addresses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            city TEXT,
+            address TEXT,
+            building TEXT,
+            clicked INTEGER DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """)
+        self.conn.commit()
+    
+    def register_user(self, tc, password):
+        try:
+            self.cursor.execute("INSERT INTO users (tc, password) VALUES (?, ?)", (tc, password))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def login_user(self, tc, password):
+        self.cursor.execute("SELECT id FROM users WHERE tc = ? AND password = ?", (tc, password))
+        return self.cursor.fetchone()
+    
+    def add_address(self, user_id, city, address, building):
+        self.cursor.execute("INSERT INTO addresses (user_id, city, address, building) VALUES (?, ?, ?, ?)", (user_id, city, address, building))
+        self.conn.commit()
+    
+    def get_addresses(self, user_id):
+        self.cursor.execute("SELECT id, city, address, building, clicked FROM addresses WHERE user_id = ? ORDER BY clicked ASC", (user_id,))
+        return self.cursor.fetchall()
+
+db = Database()
+user_id = None
+
+class LoginForm(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Giriş / Kayıt Ol")
+        self.layout = QVBoxLayout()
+        
+        self.tc_input = QLineEdit()
+        self.tc_input.setPlaceholderText("TC Kimlik No")
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Şifre")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        
+        self.login_button = QPushButton("Giriş Yap")
+        self.register_button = QPushButton("Kayıt Ol")
+        
+        self.layout.addWidget(QLabel("TC Kimlik No:"))
+        self.layout.addWidget(self.tc_input)
+        self.layout.addWidget(QLabel("Şifre:"))
+        self.layout.addWidget(self.password_input)
+        self.layout.addWidget(self.login_button)
+        self.layout.addWidget(self.register_button)
+        
+        self.setLayout(self.layout)
+        
+        self.login_button.clicked.connect(self.login)
+        self.register_button.clicked.connect(self.register)
+    
+    def login(self):
+        global user_id
+        tc = self.tc_input.text()
+        password = self.password_input.text()
+        user = db.login_user(tc, password)
+        if user:
+            user_id = user[0]
+            self.hide()
+            self.address_form = AddressForm()
+            self.address_form.show()
+        else:
+            QMessageBox.warning(self, "Hata", "Geçersiz TC veya şifre!")
+    
+    def register(self):
+        tc = self.tc_input.text()
+        password = self.password_input.text()
+        if db.register_user(tc, password):
+            QMessageBox.information(self, "Başarılı", "Kayıt oluşturuldu, giriş yapabilirsiniz.")
+        else:
+            QMessageBox.warning(self, "Hata", "Bu TC ile kayıtlı bir hesap var!")
+
+class AddressForm(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Adres Kaydet")
+        self.layout = QVBoxLayout()
+        
+        self.city_input = QLineEdit()
+        self.city_input.setPlaceholderText("Şehir")
+        self.address_input = QLineEdit()
+        self.address_input.setPlaceholderText("Adres")
+        self.building_input = QLineEdit()
+        self.building_input.setPlaceholderText("Bina Adı")
+        
+        self.save_button = QPushButton("Kaydet")
+        self.next_button = QPushButton("Adresleri Gör")
+        
+        self.layout.addWidget(QLabel("Şehir:"))
+        self.layout.addWidget(self.city_input)
+        self.layout.addWidget(QLabel("Adres:"))
+        self.layout.addWidget(self.address_input)
+        self.layout.addWidget(QLabel("Bina Adı:"))
+        self.layout.addWidget(self.building_input)
+        self.layout.addWidget(self.save_button)
+        self.layout.addWidget(self.next_button)
+        
+        self.setLayout(self.layout)
+class AddressListForm(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Adres Listesi")
+        self.layout = QVBoxLayout()
+
+        self.address_list = QListWidget()
+        self.layout.addWidget(QLabel("Kayıtlı Adresleriniz:"))
+        self.layout.addWidget(self.address_list)
+
+        self.load_addresses()
+        
+        self.setLayout(self.layout)
+
+    def load_addresses(self):
+        global user_id
+        self.address_list.clear()
+        if user_id is not None:
+            addresses = db.get_addresses(user_id)
+            for address in addresses:
+                address_id, city, addr, building, clicked = address
+                self.address_list.addItem(f"{city}, {addr}, {building}")
+
+        
+        self.save_button.clicked.connect(self.save_address)
+        self.next_button.clicked.connect(self.show_address_list)
+    
+    def save_address(self):
+        global user_id
+        city = self.city_input.text()
+        address = self.address_input.text()
+        building = self.building_input.text()
+        if user_id is not None:
+            db.add_address(user_id, city, address, building)
+            QMessageBox.information(self, "Başarılı", "Adres kaydedildi!")
+        else:
+            QMessageBox.warning(self, "Hata", "Kullanıcı kimliği bulunamadı!")
+
+
+    
+    def show_address_list(self):
+        self.hide()
+        self.address_list = AddressListForm()
+        self.address_list.show()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    login_form = LoginForm()
+    login_form.show()
+    sys.exit(app.exec_())

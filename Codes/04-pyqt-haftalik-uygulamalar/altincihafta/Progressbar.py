@@ -9,21 +9,21 @@ class Example(QMainWindow):
         super().__init__()
 
         self.pbar = QProgressBar(self)
-        self.pbar.setGeometry(30, 40, 200, 25)
-        self.pbar.setValue(50)
+        self.pbar.setGeometry(100, 100, 500, 30) #geometrisini ayarladık
+        self.pbar.setValue(40) #başlangıç değeri
         
         self.setWindowTitle("QT Progressbar Example")
-        self.setGeometry(32,32,320,200)
+        self.setGeometry(300,300,700,600)   #sayfa geometrisi
         self.show()
 
-        self.timer = QTimer()
+        self.timer = QTimer() #zamanlayıcı oluşturduk
         self.timer.timeout.connect(self.handleTimer)
-        self.timer.start(1000)
+        self.timer.start(1000) #1 saniyede bir artacak
 
     def handleTimer(self):
         value = self.pbar.value()
         if value < 100:
-            value = value + 1
+            value = value + 1 #100 olana kadar 1 arttır
             self.pbar.setValue(value)
         else:
             self.timer.stop()

@@ -1,0 +1,202 @@
+import sys
+import sqlite3
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QPushButton,
+                             QVBoxLayout, QMessageBox, QListWidget)
+from PyQt5.QtCore import Qt
+
+def veritabani_baglan():
+    conn = sqlite3.connect('deprem_uygulamasi.db')
+    return conn
+
+def tablo_olustur():
+    conn = veritabani_baglan()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS kullanicilar (
+            tc_kimlik TEXT PRIMARY KEY,
+            sifre TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS adresler (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tc_kimlik TEXT,
+            sehir TEXT,
+            adres TEXT,
+            bina_adi TEXT,
+            FOREIGN KEY (tc_kimlik) REFERENCES kullanicilar(tc_kimlik)
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+tablo_olustur()
+
+class GirisKayitFormu(QMainWindow):
+    def __init__(self, adres_kayit_formu):
+        super().__init__()
+        self.adres_kayit_formu = adres_kayit_formu
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Giriş / Kayıt')
+        self.setGeometry(300, 300, 300, 200)
+
+        self.merkezi_widget = QWidget()
+        self.setCentralWidget(self.merkezi_widget)
+
+        self.tc_label = QLabel('TC Kimlik No:')
+        self.tc_input = QLineEdit()
+
+        self.sifre_label = QLabel('Şifre:')
+        self.sifre_input = QLineEdit()
+        self.sifre_input.setEchoMode(QLineEdit.Password)
+
+        self.giris_button = QPushButton('Giriş')
+        self.kayit_button = QPushButton('Kayıt')
+
+        self.giris_button.clicked.connect(self.giris)
+        self.kayit_button.clicked.connect(self.kayit)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.tc_label)
+        düzen.addWidget(self.tc_input)
+        düzen.addWidget(self.sifre_label)
+        düzen.addWidget(self.sifre_input)
+        düzen.addWidget(self.giris_button)
+        düzen.addWidget(self.kayit_button)
+
+        self.merkezi_widget.setLayout(düzen)
+
+    def giris(self):
+        tc = self.tc_input.text()
+        sifre = self.sifre_input.text()
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM kullanicilar WHERE tc_kimlik = ? AND sifre = ?', (tc, sifre))
+        kullanici = cursor.fetchone()
+
+        conn.close()
+
+        if kullanici:
+            QMessageBox.information(self, 'Giriş', 'Giriş başarılı!')
+            self.adres_kayit_formu.tc = tc
+            self.adres_kayit_formu.show()
+            self.hide()
+        else:
+            QMessageBox.warning(self, 'Giriş', 'TC kimlik numarası veya şifre hatalı!')
+
+    def kayit(self):
+        tc = self.tc_input.text()
+        sifre = self.sifre_input.text()
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('INSERT INTO kullanicilar (tc_kimlik, sifre) VALUES (?, ?)', (tc, sifre))
+            conn.commit()
+            QMessageBox.information(self, 'Kayıt', 'Kayıt başarılı!')
+        except sqlite3.IntegrityError:
+            QMessageBox.warning(self, 'Kayıt', 'Bu TC kimlik numarası zaten kayıtlı!')
+
+        conn.close()
+
+class AdresKayitFormu(QMainWindow):
+    def __init__(self, adres_listesi_formu):
+        super().__init__()
+        self.adres_listesi_formu = adres_listesi_formu
+        self.initUI()
+        self.tc = None
+
+    def initUI(self):
+        self.setWindowTitle('Adres Kayıt')
+        self.setGeometry(300, 300, 400, 300)
+
+        self.merkezi_widget = QWidget()
+        self.setCentralWidget(self.merkezi_widget)
+
+        self.sehir_label = QLabel('Şehir:')
+        self.sehir_input = QLineEdit()
+
+        self.adres_label = QLabel('Adres:')
+        self.adres_input = QLineEdit()
+
+        self.bina_label = QLabel('Bina Adı:')
+        self.bina_input = QLineEdit()
+
+        self.kaydet_button = QPushButton('Kaydet')
+        self.kaydet_button.clicked.connect(self.kaydet)
+
+        self.adresleri_goster_button = QPushButton('Adresleri Göster')
+        self.adresleri_goster_button.clicked.connect(self.adresleri_goster)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.sehir_label)
+        düzen.addWidget(self.sehir_input)
+        düzen.addWidget(self.adres_label)
+        düzen.addWidget(self.adres_input)
+        düzen.addWidget(self.bina_label)
+        düzen.addWidget(self.bina_input)
+        düzen.addWidget(self.kaydet_button)
+        düzen.addWidget(self.adresleri_goster_button)
+
+        self.merkezi_widget.setLayout(düzen)
+
+    def kaydet(self):
+        sehir = self.sehir_input.text()
+        adres = self.adres_input.text()
+        bina = self.bina_input.text()
+
+        if not sehir or not adres or not bina:
+            QMessageBox.warning(self, 'Eksik Bilgi', 'Lütfen tüm bilgileri doldurun!')
+            return
+
+        conn = veritabani_baglan()
+        cursor = conn.cursor()
+
+        cursor.execute('INSERT INTO adresler (tc_kimlik, sehir, adres, bina_adi) VALUES (?, ?, ?, ?)',
+                       (self.tc, sehir, adres, bina))
+        conn.commit()
+        conn.close()
+
+        QMessageBox.information(self, 'Kayıt', 'Adres kaydedildi!')
+        self.adres_listesi_formu.adresleri_guncelle(self.tc)
+        self.adres_listesi_formu.show()
+        self.hide()
+
+    def adresleri_goster(self):
+        self.adres_listesi_formu.adresleri_guncelle(self.tc)
+        self.adres_listesi_formu.show()
+        self.hide()
+
+class TumAdreslerFormu(QMainWindow):
+    def __init__(self, adres_durumu_formu):
+        super().__init__()
+        self.adres_durumu_formu = adres_durumu_formu
+        self.initUI()
+        self.adresler = []
+        self.tc = None
+
+    def initUI(self):
+        self.setWindowTitle('Tüm Adresler')
+        self.setGeometry(300, 300, 400, 300)
+
+        self.merkezi_widget = QWidget()
+        self.setCentralWidget(self.merkezi_widget)
+
+        self.adres_liste_widget = QListWidget()
+
+        self.deprem_button = QPushButton('Deprem Oldu')
+        self.deprem_button.clicked.connect(self.deprem_oldu)
+
+        düzen = QVBoxLayout()
+        düzen.addWidget(self.adres_liste_widget)
+        düzen.addWidget(self.deprem_button)
+
+        self.merkezi_widget.setLayout(düzen)

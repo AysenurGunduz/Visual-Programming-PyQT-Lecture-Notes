@@ -8,6 +8,12 @@ class Window(QWidget):
         layout = QGridLayout()
         self.setLayout(layout)
 
+        self.setWindowTitle("ToolBox Example")
+
+        self.pbar = QToolBox(self)
+        self.pbar.setGeometry(100, 100, 500, 30) #geometrisini ayarladık
+        #self.pbar.setValue(40) #başlangıç değeri
+
         # Add toolbar and items
         toolbox = QToolBox()
         layout.addWidget(toolbox, 0, 0)
@@ -22,10 +28,10 @@ class Window(QWidget):
         print(toolbox.count())
 
         # disable tab
-        toolbox.setItemEnabled(0, False)
+        toolbox.setItemEnabled(0, False) #öğrenciyi kapatırız burada sanırım 
 
         # mouseover tooltip
-        toolbox.setItemToolTip(0, "This is a tooltip")
+        toolbox.setItemToolTip(0, "This is a tooltip") #fareyle öğrencinin üstüne gittiğimizde bu yazı görünür bilgi veriri gibi düşünelim 
 
         # tests if items are enabled
         print(toolbox.isItemEnabled(0))
